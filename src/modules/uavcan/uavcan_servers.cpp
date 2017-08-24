@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (c) 2014 PX4 Development Team. All rights reserved.
+ *   Copyright (c) 2014-2017 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,6 +31,8 @@
  *
  ****************************************************************************/
 
+#include <px4_tasks.h>
+
 #include <nuttx/config.h>
 
 #include <cstdlib>
@@ -44,8 +46,6 @@
 #include <systemlib/param/param.h>
 #include <systemlib/mixer/mixer.h>
 #include <systemlib/board_serial.h>
-#include <systemlib/scheduling_priorities.h>
-#include <systemlib/git_version.h>
 #include <version/version.h>
 #include <arch/board/board.h>
 #include <arch/chip/chip.h>
@@ -59,10 +59,11 @@
 #include <uavcan_posix/firmware_version_checker.hpp>
 
 #include <uORB/topics/vehicle_command.h>
+#include <uORB/topics/vehicle_command_ack.h>
 #include <uORB/topics/uavcan_parameter_request.h>
 #include <uORB/topics/uavcan_parameter_value.h>
 
-#include <v1.0/common/mavlink.h>
+#include <v2.0/common/mavlink.h>
 
 
 /**
@@ -468,6 +469,8 @@ pthread_addr_t UavcanServers::run(pthread_addr_t)
 			struct vehicle_command_s cmd;
 			orb_copy(ORB_ID(vehicle_command), cmd_sub, &cmd);
 
+			uint8_t cmd_ack_result = vehicle_command_ack_s::VEHICLE_RESULT_ACCEPTED;
+
 			if (cmd.command == vehicle_command_s::VEHICLE_CMD_PREFLIGHT_UAVCAN) {
 				int command_id = static_cast<int>(cmd.param1 + 0.5f);
 				int node_id = static_cast<int>(cmd.param2 + 0.5f);
@@ -490,6 +493,7 @@ pthread_addr_t UavcanServers::run(pthread_addr_t)
 						if (call_res < 0) {
 							warnx("UAVCAN ESC enumeration: couldn't send initial Begin request: %d", call_res);
 							beep(BeepFrequencyError);
+							cmd_ack_result = vehicle_command_ack_s::VEHICLE_RESULT_FAILED;
 						} else {
 							beep(BeepFrequencyGenericIndication);
 						}
@@ -497,6 +501,7 @@ pthread_addr_t UavcanServers::run(pthread_addr_t)
 					}
 				default: {
 						warnx("UAVCAN command bridge: unknown command ID %d", command_id);
+						cmd_ack_result = vehicle_command_ack_s::VEHICLE_RESULT_UNSUPPORTED;
 						break;
 					}
 				}
@@ -527,6 +532,25 @@ pthread_addr_t UavcanServers::run(pthread_addr_t)
 					}
 				}
 			}
+
+			// Acknowledge the received command
+			struct vehicle_command_ack_s ack = {
+				.timestamp = 0,
+				.result_param2 = 0,
+				.command = cmd.command,
+				.result = cmd_ack_result,
+				.from_external = 0,
+				.result_param1 = 0,
+				.target_system = cmd.source_system,
+				.target_component = cmd.source_component
+			};
+
+			if (_command_ack_pub == nullptr) {
+				_command_ack_pub = orb_advertise_queue(ORB_ID(vehicle_command_ack), &ack, vehicle_command_ack_s::ORB_QUEUE_LENGTH);
+			} else {
+				orb_publish(ORB_ID(vehicle_command_ack), _command_ack_pub, &ack);
+			}
+
 		}
 
 		// Shut down once armed
@@ -537,7 +561,7 @@ pthread_addr_t UavcanServers::run(pthread_addr_t)
 			struct actuator_armed_s armed;
 			orb_copy(ORB_ID(actuator_armed), armed_sub, &armed);
 
-			if (armed.armed && !armed.lockdown) {
+			if (armed.armed && !(armed.lockdown || armed.manual_lockdown)) {
 				warnx("UAVCAN command bridge: system armed, exiting now.");
 				break;
 			}

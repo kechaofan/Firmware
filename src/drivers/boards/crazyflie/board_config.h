@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (c) 2013, 2014 PX4 Development Team. All rights reserved.
+ *   Copyright (c) 2012-2016 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -47,11 +47,6 @@
 #include <nuttx/compiler.h>
 #include <stdint.h>
 
-#include <stm32.h>
-#include <arch/board/board.h>
-
-#define UDID_START		0x1FFF7A10
-
 /****************************************************************************************************
  * Definitions
  ****************************************************************************************************/
@@ -95,6 +90,10 @@
 #define PX4_I2C_BUS_EXPANSION_HZ      400000
 
 #define PX4_I2C_BUS_MTD	PX4_I2C_BUS_EXPANSION
+
+#define BOARD_NUMBER_I2C_BUSES  3
+#define BOARD_I2C_BUS_CLOCK_INIT {PX4_I2C_BUS_ONBOARD_HZ, 100000, PX4_I2C_BUS_EXPANSION_HZ}
+
 
 
 
@@ -179,11 +178,10 @@
 #define HRT_TIMER		8	/* use timer8 for the HRT */
 #define HRT_TIMER_CHANNEL	1	/* use capture/compare channel */
 
+#define	BOARD_NAME "CRAZYFLIE"
 
 
 #define BOARD_HAS_PWM	DIRECT_PWM_OUTPUT_CHANNELS
-
-#define BOARD_FMU_GPIO_TAB { {0, 0, 0}, }
 
 #define BOARD_NAME "CRAZYFLIE"
 
@@ -225,29 +223,10 @@ __BEGIN_DECLS
 extern void stm32_usbinitialize(void);
 
 /****************************************************************************
- * Name: nsh_archinitialize
- *
- * Description:
- *   Perform architecture specific initialization for NSH.
- *
- *   CONFIG_NSH_ARCHINIT=y :
- *     Called from the NSH library
- *
- *   CONFIG_BOARD_INITIALIZE=y, CONFIG_NSH_LIBRARY=y, &&
- *   CONFIG_NSH_ARCHINIT=n :
- *     Called from board_initialize().
- *
- ****************************************************************************/
-
-#ifdef CONFIG_NSH_LIBRARY
-int nsh_archinitialize(void);
-#endif
-
-/****************************************************************************
  * Name: board_i2c_initialize
  *
  * Description:
- *   Called to set I2C bus frequncies.
+ *   Called to set I2C bus frequencies.
  *
  ****************************************************************************/
 

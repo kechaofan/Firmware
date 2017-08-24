@@ -1,5 +1,7 @@
 include(nuttx/px4_impl_nuttx)
 
+px4_nuttx_configure(HWCLASS m4 CONFIG nsh ROMFS y ROMFSROOT px4fmu_common)
+
 set(CMAKE_TOOLCHAIN_FILE ${PX4_SOURCE_DIR}/cmake/toolchains/Toolchain-arm-none-eabi.cmake)
 
 set(config_uavcan_num_ifaces 2)
@@ -30,10 +32,11 @@ set(config_module_list
 	drivers/ll40ls
 	drivers/lsm303d
 	drivers/mb12xx
-	drivers/meas_airspeed
 	drivers/mkblctrl
 	drivers/mpu6000
 	drivers/mpu9250
+	drivers/ms4525_airspeed
+	drivers/ms5525_airspeed
 	drivers/ms5611
 	drivers/oreoled
 	drivers/pwm_input
@@ -42,6 +45,7 @@ set(config_module_list
 	drivers/px4fmu
 	drivers/px4io
 	drivers/rgbled
+	drivers/sdp3x_airspeed
 	drivers/sf0x
 	drivers/sf1xx
 	drivers/snapdragon_rc_pwm
@@ -61,8 +65,11 @@ set(config_module_list
 	systemcmds/config
 	systemcmds/dumpfile
 	systemcmds/esc_calib
+	systemcmds/hardfault_log
+	systemcmds/led_control
 	systemcmds/mixer
 	systemcmds/motor_ramp
+	systemcmds/motor_test
 	systemcmds/mtd
 	systemcmds/nshterm
 	systemcmds/param
@@ -81,10 +88,9 @@ set(config_module_list
 	drivers/test_ppm
 	#lib/rc/rc_tests
 	modules/commander/commander_tests
-	modules/controllib_test
+	lib/controllib/controllib_test
 	modules/mavlink/mavlink_tests
 	modules/mc_pos_control/mc_pos_control_tests
-	modules/unit_test
 	modules/uORB/uORB_tests
 	systemcmds/tests
 
@@ -92,12 +98,14 @@ set(config_module_list
 	# General system control
 	#
 	modules/commander
+	modules/events
 	modules/gpio_led
 	modules/land_detector
 	modules/load_mon
 	modules/mavlink
 	modules/navigator
 	modules/uavcan
+	modules/camera_feedback
 
 	#
 	# Estimation modules
@@ -112,6 +120,8 @@ set(config_module_list
 	#
 	modules/fw_att_control
 	modules/fw_pos_control_l1
+	modules/gnd_att_control
+	modules/gnd_pos_control
 	modules/mc_att_control
 	modules/mc_pos_control
 	modules/vtol_att_control
@@ -126,10 +136,13 @@ set(config_module_list
 	# Library modules
 	#
 	modules/dataman
-	modules/param
+	modules/systemlib/param
 	modules/systemlib
 	modules/systemlib/mixer
 	modules/uORB
+
+	# micro RTPS
+	modules/micrortps_bridge/micrortps_client
 
 	#
 	# Libraries
@@ -142,15 +155,20 @@ set(config_module_list
 	lib/geo
 	lib/geo_lookup
 	lib/launchdetection
+	lib/led
 	lib/mathlib
 	lib/mathlib/math/filter
 	lib/runway_takeoff
 	lib/tailsitter_recovery
 	lib/terrain_estimation
-	platforms/nuttx
+	lib/version
+	lib/micro-CDR
 
-	# had to add for cmake, not sure why wasn't in original config
+	#
+	# Platform
+	#
 	platforms/common
+	platforms/nuttx
 	platforms/nuttx/px4_layer
 
 	#
@@ -164,31 +182,44 @@ set(config_module_list
 	examples/rover_steering_control
 
 	#
+	# Segway
+	#
+	examples/segway
+
+	#
 	# Demo apps
 	#
-	#examples/math_demo
+
 	# Tutorial code from
 	# https://px4.io/dev/px4_simple_app
 	examples/px4_simple_app
 
 	# Tutorial code from
 	# https://px4.io/dev/daemon
-	#examples/px4_daemon_app
+	examples/px4_daemon_app
 
 	# Tutorial code from
 	# https://px4.io/dev/debug_values
-	#examples/px4_mavlink_debug
+	examples/px4_mavlink_debug
 
 	# Tutorial code from
 	# https://px4.io/dev/example_fixedwing_control
-	#examples/fixedwing_control
+	examples/fixedwing_control
 
 	# Hardware test
-	#examples/hwtest
+	examples/hwtest
 
 	# EKF
 	examples/ekf_att_pos_estimator
 )
+
+set(config_rtps_send_topics
+   sensor_combined
+   )
+
+set(config_rtps_receive_topics
+   sensor_baro
+   )
 
 set(config_extra_builtin_cmds
 	serdis
@@ -199,22 +230,16 @@ set(config_io_board
 	px4io-v2
 	)
 
-set(config_extra_libs
-	uavcan
-	uavcan_stm32_driver
-	)
-
-set(config_io_extra_libs
-	)
-
 add_custom_target(sercon)
 set_target_properties(sercon PROPERTIES
 	PRIORITY "SCHED_PRIORITY_DEFAULT"
-	MAIN "sercon" STACK_MAIN "2048"
+	MAIN "sercon"
+	STACK_MAIN "2048"
 	COMPILE_FLAGS "-Os")
 
 add_custom_target(serdis)
 set_target_properties(serdis PROPERTIES
 	PRIORITY "SCHED_PRIORITY_DEFAULT"
-	MAIN "serdis" STACK_MAIN "2048"
+	MAIN "serdis"
+	STACK_MAIN "2048"
 	COMPILE_FLAGS "-Os")

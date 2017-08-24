@@ -23,7 +23,7 @@ except:
     raise
 
 
-SERVER = 'http://logs.px4.io'
+SERVER = 'https://logs.px4.io'
 #SERVER = 'http://localhost:5006' # for testing locally
 UPLOAD_URL = SERVER+'/upload'
 
@@ -93,7 +93,7 @@ def main():
         email = args.email
 
     payload = {'type': 'personal', 'description': description,
-            'feedback': feedback, 'email': email}
+            'feedback': feedback, 'email': email, 'source': args.source}
 
     for file_name in args.FILE:
         if not quiet:
